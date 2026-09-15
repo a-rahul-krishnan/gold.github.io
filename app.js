@@ -1,191 +1,95 @@
 
-const $ = (id) => document.getElementById(id);
-const num = (v) => {
-  const n = Number.parseFloat(v);
-  return Number.isFinite(n) ? n : null;
-};
+const $ = id => document.getElementById(id);
+const n = v => Number.isFinite(Number(v)) ? Number(v) : null;
+const money = (v, d=2) => n(v) == null ? "—" : Number(v).toLocaleString("en-IN",{minimumFractionDigits:d,maximumFractionDigits:d});
+const movePct = (a,b) => n(a)!=null && n(b)!=null && n(b)!==0 ? (n(a)-n(b))/n(b)*100 : null;
 
-const state = {
-  gold: null,
-  goldPrev: null,
-  fx: null,
-  fxPrevCheck: null,
-  lastFxFetch: null
-};
+const state = { xau:null, fx:null, comex:{c:null,p:null}, mcx:{c:null,p:null}, tm:{c:null,p:null,updated:""} };
 
-function pct(now, prev) {
-  if (now == null || prev == null || prev === 0) return null;
-  return ((now - prev) / prev) * 100;
-}
-function fmt(n, digits=2) {
-  return n == null ? "—" : n.toLocaleString("en-IN", {maximumFractionDigits: digits, minimumFractionDigits: digits});
-}
-function pctText(v) {
-  if (v == null) return "—";
-  return `${v >= 0 ? "+" : ""}${v.toFixed(2)}%`;
-}
-function setLive(ok, text) {
-  $("liveDot").classList.toggle("live", ok);
-  $("liveStatus").textContent = text;
-}
+function status(id,text,kind="muted"){ const e=$(id); if(e){e.textContent=text;e.className=`status ${kind}`;} }
+function render(){
+  const cp=movePct(state.comex.c,state.comex.p), mp=movePct(state.mcx.c,state.mcx.p);
+  let score=0, why=[];
+  if(cp!=null){
+    if(cp>2){score+=2;why.push("COMEX > +2%");}
+    else if(cp>=.5){score+=1;why.push("COMEX mildly up");}
+    else if(cp<=-2){score-=2;why.push("COMEX < -2%");}
+    else if(cp<-.5){score-=1;why.push("COMEX mildly down");}
+    else why.push("COMEX near flat");
+  } else why.push("COMEX input needed");
+  if(mp!=null){ if(mp>.15){score++;why.push("MCX up")} else if(mp<-.15){score--;why.push("MCX down")} }
+  const dir=score>=3?"UP":score>=1?"UP":score<=-3?"DOWN":score<=-1?"DOWN":"WAIT";
+  const sub=score>=3?"Strong bullish":score>=1?"Mild bullish":score<=-3?"Strong bearish":score<=-1?"Mild bearish":"Mixed / neutral";
+  $("prediction").textContent=dir; $("predictionSub").textContent=sub;
+  $("score").textContent=score>0?`+${score}`:score;
+  $("reasons").textContent=why.join(" • ");
+  $("comexMove").textContent=cp==null?"—":`${cp>=0?"+":""}${money(cp)}%`;
+  $("mcxMove").textContent=mp==null?"—":`${mp>=0?"+":""}${money(mp)}%`;
 
-async function fetchGold() {
-  // XAUS is browser-friendly and provides live XAU/USD spot data.
-  const url = "https://xaus.com/api/v1/spot?compact=1";
-  const res = await fetch(url, {cache:"no-store"});
-  if (!res.ok) throw new Error(`Gold API ${res.status}`);
-  const data = await res.json();
-  const price = Number(data.spot_usd_oz ?? data.xau?.price);
-  if (!Number.isFinite(price)) throw new Error("Gold price missing");
-  state.gold = price;
+  if(state.xau!=null){$("xau").textContent=`$${money(state.xau)}`;status("xauStatus","Live reference","live")}
+  else { $("xau").textContent="Unavailable"; status("xauStatus","Feed unavailable","warn"); }
+  if(state.fx!=null){$("usdInr").textContent=`₹${money(state.fx)}`;status("fxStatus","Daily reference","daily")}
+  else { $("usdInr").textContent="Unavailable"; status("fxStatus","Feed unavailable","warn"); }
 
-  // Some feeds expose previous close; keep optional.
-  const prev = Number(data.previous_close_usd_oz ?? data.previous_close ?? NaN);
-  state.goldPrev = Number.isFinite(prev) ? prev : null;
-
-  $("goldPrice").textContent = `$${fmt(price)}`;
-  $("goldPrev").textContent = state.goldPrev == null ? "Not supplied" : `$${fmt(state.goldPrev)}`;
-  $("goldChange").textContent = pctText(pct(state.gold, state.goldPrev));
-  const ts = data.updated_at || data.data_state?.as_of || data.as_of;
-  $("goldUpdated").textContent = ts ? `Updated ${new Date(ts).toLocaleString("en-IN")}` : "Live feed received";
+  if(state.tm.c!=null){
+    $("tmRate").textContent=`₹${money(state.tm.c,0)}/g`;
+    $("grams10k").textContent=`${(10000/state.tm.c).toFixed(5)} g`;
+    $("tmMove").textContent=state.tm.p!=null?`${state.tm.c-state.tm.p>=0?"+":""}₹${money(state.tm.c-state.tm.p,0)}/g`:"—";
+    $("tmUpdated").textContent=state.tm.updated||"Entered manually";
+  } else {$("tmRate").textContent="—";$("grams10k").textContent="—";$("tmMove").textContent="—";$("tmUpdated").textContent="Not entered";}
 }
 
-async function fetchFx() {
-  // Frankfurter is free and keyless. It is a daily reference rate, not tick-by-tick FX.
-  const url = "https://api.frankfurter.dev/v2/rate/usd/inr";
-  const res = await fetch(url, {cache:"no-store"});
-  if (!res.ok) throw new Error(`FX API ${res.status}`);
-  const data = await res.json();
-  const rate = Number(data.rate);
-  if (!Number.isFinite(rate)) throw new Error("USD/INR missing");
-  state.fx = rate;
-  $("fxPrice").textContent = `₹${fmt(rate, 4)}`;
-  $("fxUpdated").textContent = data.date ? `Reference date ${data.date}` : "Reference rate received";
-
-  if (state.fxPrevCheck != null) {
-    const d = state.fx - state.fxPrevCheck;
-    $("fxDirection").textContent = d > 0 ? "Rupee weaker vs prior check" : d < 0 ? "Rupee stronger vs prior check" : "Flat";
-  } else {
-    $("fxDirection").textContent = "First live check";
+async function fetchXau(){
+  const urls=[
+    "https://xaus.com/api/v1/spot?compact=1",
+    "https://xaus.com/api/v1/spot"
+  ];
+  for(const u of urls){
+    try{
+      const r=await fetch(u,{cache:"no-store"});
+      if(!r.ok) continue;
+      const j=await r.json();
+      const p=n(j?.price ?? j?.data?.price);
+      if(p!=null){state.xau=p;render();return;}
+    }catch(e){}
   }
-  state.fxPrevCheck = state.fx;
-  localStorage.setItem("tnGoldFx", String(state.fx));
+  render();
 }
 
-function calculate() {
-  const comexNow = num($("comexNow").value);
-  const comexPrev = num($("comexPrev").value);
-  const comexPct = pct(comexNow, comexPrev);
-  $("comexChange").textContent = pctText(comexPct);
-
-  let comexScore = 0;
-  if (comexPct != null) {
-    if (comexPct > 2) comexScore = 2;
-    else if (comexPct > 0.5) comexScore = 1;
-    else if (comexPct >= -0.5) comexScore = 0;
-    else if (comexPct >= -2) comexScore = -1;
-    else comexScore = -2;
-  }
-  $("comexScore").textContent = comexScore > 0 ? `+${comexScore}` : String(comexScore);
-  $("scoreGold").textContent = comexScore > 0 ? `+${comexScore}` : String(comexScore);
-
-  // FX heuristic: if USD/INR rises, the rupee weakened, which can add upward pressure to Indian gold.
-  const fxSaved = num(localStorage.getItem("tnGoldFx"));
-  let fxScore = 0;
-  // Only use manual directional override when the user checks the FX hint.
-  const fxBias = $("fxBias")?.value;
-  if (fxBias === "up") fxScore = 1;
-  if (fxBias === "down") fxScore = -1;
-  $("scoreFx").textContent = fxScore > 0 ? `+${fxScore}` : String(fxScore);
-
-  const mcxNow = num($("mcxPrice").value);
-  const mcxPrev = num($("mcxPrev").value);
-  const mcxPct = pct(mcxNow, mcxPrev);
-  $("mcxChange").textContent = pctText(mcxPct);
-  let mcxScore = 0;
-  if (mcxPct != null) mcxScore = mcxPct > 0 ? 1 : mcxPct < 0 ? -1 : 0;
-  $("scoreMcx").textContent = mcxScore > 0 ? `+${mcxScore}` : String(mcxScore);
-
-  const total = comexScore + fxScore + mcxScore;
-  $("totalScore").textContent = total > 0 ? `+${total}` : String(total);
-
-  let signal = "WAIT", cls = "neutral", confidence = 0, summary = "Not enough aligned inputs yet.";
-  if (total >= 3) {signal="UP"; cls="up"; confidence=80; summary="Strong upward bias: multiple inputs agree."; }
-  else if (total >= 1) {signal="UP"; cls="up"; confidence=60; summary="Mild upward bias. Wait for MCX/FX confirmation if possible."; }
-  else if (total <= -3) {signal="DOWN"; cls="down"; confidence=80; summary="Strong downward bias: multiple inputs agree."; }
-  else if (total <= -1) {signal="DOWN"; cls="down"; confidence=60; summary="Mild downward bias. Confirmation is recommended."; }
-  $("signal").textContent = signal;
-  $("signal").className = `signal ${cls}`;
-  $("confidence").textContent = `Heuristic confidence ${confidence}%`;
-  $("summary").textContent = summary;
-
-  const base = num($("tnBase").value);
-  let low=null, high=null;
-  if (base != null && total !== 0) {
-    // Conservative range around the directional score; intentionally not a price-forecasting model.
-    const centerPct = total >= 3 ? 1.0 : total >= 1 ? 0.45 : total <= -3 ? -1.0 : -0.45;
-    const band = total >= 3 || total <= -3 ? 0.55 : 0.35;
-    low = base * (1 + (centerPct-band)/100);
-    high = base * (1 + (centerPct+band)/100);
-  }
-  $("tnRange").textContent = low != null ? `₹${fmt(low)} – ₹${fmt(high)} / gram` : "Enter current 22K ₹/g";
+async function fetchFx(){
+  // Frankfurter is intentionally a daily reference, not an intraday trading feed.
+  try{
+    const r=await fetch("https://api.frankfurter.dev/v2/rate/usd/inr",{cache:"no-store"});
+    if(!r.ok) throw new Error();
+    const j=await r.json();
+    const v=n(j?.rate);
+    if(v!=null){state.fx=v;localStorage.setItem("gold_fx_latest",String(v));render();return;}
+  }catch(e){}
+  const cached=n(localStorage.getItem("gold_fx_latest"));
+  if(cached!=null) state.fx=cached;
+  render();
 }
 
-function addFxBiasControl() {
-  const card = $("scoreFx").closest(".card");
-  // Insert a small hidden-ish control after the explanation section if missing.
-  const wrap = document.createElement("div");
-  wrap.className = "mini-fx";
-  wrap.innerHTML = `
-    <label for="fxBias">FX bias for prediction</label>
-    <select id="fxBias" style="width:100%;padding:12px;border-radius:10px;border:1px solid var(--line);background:var(--panel2);color:var(--text)">
-      <option value="">Neutral / not confirmed</option>
-      <option value="up">USD/INR up (₹ weaker) → gold supportive</option>
-      <option value="down">USD/INR down (₹ stronger) → gold less supportive</option>
-    </select>`;
-  card.appendChild(wrap);
-  $("fxBias").addEventListener("change", calculate);
+function load(){
+  try{
+    const x=JSON.parse(localStorage.getItem("gold_predictor_v3")||"{}");
+    for(const k of ["comexC","comexP","mcxC","mcxP","tmC","tmP","tmU"]) if(x[k]!=null && $(k)) $(k).value=x[k];
+    state.comex.c=n(x.comexC); state.comex.p=n(x.comexP);
+    state.mcx.c=n(x.mcxC); state.mcx.p=n(x.mcxP);
+    state.tm.c=n(x.tmC); state.tm.p=n(x.tmP); state.tm.updated=x.tmU||"";
+  }catch(e){}
+  render();
 }
-
-async function refresh() {
-  setLive(false, "Refreshing…");
-  const results = await Promise.allSettled([fetchGold(), fetchFx()]);
-  const ok = results.some(r => r.status === "fulfilled");
-  if (results.every(r => r.status === "fulfilled")) setLive(true, "Live feeds connected");
-  else if (ok) setLive(true, "Partial live data");
-  else setLive(false, "Live feeds unavailable");
-  calculate();
+function save(){
+  const x={comexC:$("comexC").value,comexP:$("comexP").value,mcxC:$("mcxC").value,mcxP:$("mcxP").value,tmC:$("tmC").value,tmP:$("tmP").value,tmU:$("tmU").value};
+  localStorage.setItem("gold_predictor_v3",JSON.stringify(x));
+  state.comex.c=n(x.comexC);state.comex.p=n(x.comexP);state.mcx.c=n(x.mcxC);state.mcx.p=n(x.mcxP);state.tm.c=n(x.tmC);state.tm.p=n(x.tmP);state.tm.updated=x.tmU;
+  render();
 }
-
-["comexNow","comexPrev","mcxPrice","mcxPrev","tnBase"].forEach(id => {
-  $(id).addEventListener("input", calculate);
+function clearAll(){localStorage.removeItem("gold_predictor_v3");["comexC","comexP","mcxC","mcxP","tmC","tmP","tmU"].forEach(id=>$(id).value="");load();}
+document.addEventListener("DOMContentLoaded",()=>{
+  load();
+  $("saveBtn").onclick=save; $("clearBtn").onclick=clearAll;
+  $("refreshBtn").onclick=()=>Promise.all([fetchXau(),fetchFx()]);
+  Promise.all([fetchXau(),fetchFx()]);
 });
-$("refreshBtn").addEventListener("click", refresh);
-
-addFxBiasControl();
-refresh();
-
-// Keep live gold fresh every 60 seconds. XAUS asks clients to cache at least 30 seconds.
-setInterval(refresh, 60000);
-
-
-// v2: Thangamayil 22K 916 tracking for the user's ₹10,000 plan.
-const tmCurrent = document.getElementById("thangamayilCurrent");
-const tmPrevious = document.getElementById("thangamayilPrevious");
-const tmUpdated = document.getElementById("thangamayilUpdated");
-const tmRateOut = document.getElementById("tmRate");
-const tmMoveOut = document.getElementById("tmMove");
-const tmGramsOut = document.getElementById("grams10k");
-
-function updateThangamayil() {
-  const cur = Number(tmCurrent?.value);
-  const prev = Number(tmPrevious?.value);
-  if (!Number.isFinite(cur) || cur <= 0) return;
-  if (tmRateOut) tmRateOut.textContent = `₹${cur.toLocaleString("en-IN")}/g`;
-  if (tmGramsOut) tmGramsOut.textContent = `${(10000/cur).toFixed(5)} g`;
-  if (tmMoveOut && Number.isFinite(prev) && prev > 0) {
-    const d = cur - prev;
-    tmMoveOut.textContent = `${d >= 0 ? "+" : ""}₹${d.toLocaleString("en-IN")}/g`;
-  }
-}
-document.getElementById("saveBtn")?.addEventListener("click", updateThangamayil);
