@@ -167,3 +167,25 @@ refresh();
 
 // Keep live gold fresh every 60 seconds. XAUS asks clients to cache at least 30 seconds.
 setInterval(refresh, 60000);
+
+
+// v2: Thangamayil 22K 916 tracking for the user's ₹10,000 plan.
+const tmCurrent = document.getElementById("thangamayilCurrent");
+const tmPrevious = document.getElementById("thangamayilPrevious");
+const tmUpdated = document.getElementById("thangamayilUpdated");
+const tmRateOut = document.getElementById("tmRate");
+const tmMoveOut = document.getElementById("tmMove");
+const tmGramsOut = document.getElementById("grams10k");
+
+function updateThangamayil() {
+  const cur = Number(tmCurrent?.value);
+  const prev = Number(tmPrevious?.value);
+  if (!Number.isFinite(cur) || cur <= 0) return;
+  if (tmRateOut) tmRateOut.textContent = `₹${cur.toLocaleString("en-IN")}/g`;
+  if (tmGramsOut) tmGramsOut.textContent = `${(10000/cur).toFixed(5)} g`;
+  if (tmMoveOut && Number.isFinite(prev) && prev > 0) {
+    const d = cur - prev;
+    tmMoveOut.textContent = `${d >= 0 ? "+" : ""}₹${d.toLocaleString("en-IN")}/g`;
+  }
+}
+document.getElementById("saveBtn")?.addEventListener("click", updateThangamayil);

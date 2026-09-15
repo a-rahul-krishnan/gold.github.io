@@ -186,7 +186,39 @@
       <p>Front-end only • GitHub Pages friendly • No API keys embedded</p>
       <p>Data notes: XAUS for live XAU/USD spot; Frankfurter for USD/INR reference FX. See README for source details and limitations.</p>
     </footer>
-  </main>
+  
+<section class="card">
+  <h2>Thangamayil 22K 916 — Your ₹10,000 Plan</h2>
+  <div class="formgrid">
+    <label>Current rate ₹/g
+      <input id="thangamayilCurrent" type="number" step="1" placeholder="14040">
+    </label>
+    <label>Previous rate ₹/g
+      <input id="thangamayilPrevious" type="number" step="1" placeholder="14010">
+    </label>
+    <label>Last updated
+      <input id="thangamayilUpdated" type="text" placeholder="15 Sep ~6 PM">
+    </label>
+  </div>
+  <div class="hero">
+    <div><div class="label">Current</div><div id="tmRate" class="price">—</div></div>
+    <div><div class="label">₹10,000 converts to</div><div id="grams10k" class="price">—</div></div>
+    <div><div class="label">Change vs previous</div><div id="tmMove" class="price">—</div></div>
+  </div>
+  <p class="muted">Use the actual Thangamayil 22K 916 rate shown for your scheme. The site does not assume that a generic Chennai rate is your scheme rate.</p>
+</section>
+
+<section class="card">
+  <h2>Daily 2:30 AM → 10 AM workflow</h2>
+  <ol>
+    <li>~2:30 AM IST: record COMEX/current and previous values.</li>
+    <li>8:30–9:00 AM: refresh gold and USD/INR references.</li>
+    <li>~10 AM: enter the Thangamayil 22K 916 rate and compare prediction vs actual.</li>
+  </ol>
+  <p class="muted">The video's +2% COMEX rule is a heuristic, not a guarantee. Your scheme's exact rate/payment cutoff should come from its written terms.</p>
+</section>
+
+</main>
 
   <script src="app.js"></script>
 </body>
