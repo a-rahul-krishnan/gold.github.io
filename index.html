@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Tamil Nadu Gold Predictor</title>
+  <meta name="description" content="Front-end only Tamil Nadu gold prediction dashboard using COMEX/global gold, USD/INR and optional MCX confirmation.">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <div class="eyebrow">TAMIL NADU • GOLD</div>
+      <h1>Gold Predictor</h1>
+      <p>Simple overnight signal based on the video method: global gold/COMEX + USD/INR + MCX confirmation.</p>
+    </div>
+    <div class="status-wrap">
+      <span id="liveDot" class="dot"></span>
+      <span id="liveStatus">Starting…</span>
+      <button id="refreshBtn" class="ghost">Refresh</button>
+    </div>
+  </header>
+
+  <main class="container">
+    <section class="hero-grid">
+      <div class="signal-card">
+        <div class="label">Prediction</div>
+        <div id="signal" class="signal neutral">WAIT</div>
+        <div id="confidence" class="confidence">Confidence 0%</div>
+        <p id="summary">Enter/refresh market inputs to calculate the signal.</p>
+      </div>
+      <div class="timing-card">
+        <div class="label">Video method timing</div>
+        <div class="big">~2:00–2:30 AM IST</div>
+        <p>Use this as the overnight COMEX/global-gold checkpoint from the video. US daylight-saving shifts can change the exact equivalent, so treat it as a window, not a fixed settlement time.</p>
+      </div>
+    </section>
+
+    <section class="grid three">
+      <article class="card">
+        <div class="card-head">
+          <div>
+            <div class="label">Global gold</div>
+            <h2>Live spot proxy</h2>
+          </div>
+          <span class="pill" id="goldSource">XAUS</span>
+        </div>
+        <div class="price" id="goldPrice">—</div>
+        <div class="sub" id="goldUpdated">Waiting for data…</div>
+        <div class="mini-row">
+          <span>Previous close</span>
+          <strong id="goldPrev">—</strong>
+        </div>
+        <div class="mini-row">
+          <span>Change</span>
+          <strong id="goldChange">—</strong>
+        </div>
+        <p class="note">This is a browser-safe live XAU/USD spot feed used as a global-gold proxy. It is not a guaranteed COMEX futures quote.</p>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <div>
+            <div class="label">FX</div>
+            <h2>USD / INR</h2>
+          </div>
+          <span class="pill" id="fxSource">Frankfurter</span>
+        </div>
+        <div class="price" id="fxPrice">—</div>
+        <div class="sub" id="fxUpdated">Waiting for data…</div>
+        <div class="mini-row">
+          <span>Direction vs prior check</span>
+          <strong id="fxDirection">—</strong>
+        </div>
+        <p class="note">The free public FX feed is daily, so the dashboard uses it as a directional input rather than tick-by-tick USD/INR.</p>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <div>
+            <div class="label">MCX confirmation</div>
+            <h2>Optional manual input</h2>
+          </div>
+          <span class="pill">Manual</span>
+        </div>
+        <label for="mcxPrice">MCX Gold price (₹ / 10g)</label>
+        <input id="mcxPrice" inputmode="decimal" type="number" step="0.01" placeholder="e.g. 132500">
+        <label for="mcxPrev">Previous MCX close (₹ / 10g)</label>
+        <input id="mcxPrev" inputmode="decimal" type="number" step="0.01" placeholder="e.g. 131700">
+        <div class="mini-row">
+          <span>MCX change</span>
+          <strong id="mcxChange">—</strong>
+        </div>
+      </article>
+    </section>
+
+    <section class="card">
+      <div class="card-head">
+        <div>
+          <div class="label">COMEX input</div>
+          <h2>Enter the video checkpoint</h2>
+        </div>
+        <span class="pill accent">Core signal</span>
+      </div>
+
+      <div class="form-grid">
+        <div>
+          <label for="comexNow">COMEX Gold now ($ / oz)</label>
+          <input id="comexNow" inputmode="decimal" type="number" step="0.01" placeholder="e.g. 5050">
+        </div>
+        <div>
+          <label for="comexPrev">COMEX previous close ($ / oz)</label>
+          <input id="comexPrev" inputmode="decimal" type="number" step="0.01" placeholder="e.g. 4950">
+        </div>
+      </div>
+
+      <div class="result-strip">
+        <div>
+          <span class="label">COMEX change</span>
+          <strong id="comexChange">—</strong>
+        </div>
+        <div>
+          <span class="label">COMEX score</span>
+          <strong id="comexScore">0</strong>
+        </div>
+      </div>
+
+      <div class="help">
+        <strong>Simple rule:</strong> above +2% = strong bullish; +0.5% to +2% = mild bullish; −0.5% to +0.5% = neutral; −0.5% to −2% = mild bearish; below −2% = strong bearish.
+      </div>
+    </section>
+
+    <section class="grid two">
+      <article class="card">
+        <div class="card-head">
+          <div>
+            <div class="label">Prediction engine</div>
+            <h2>How the score is built</h2>
+          </div>
+        </div>
+        <div class="score-table">
+          <div><span>COMEX / global-gold move</span><strong id="scoreGold">0</strong></div>
+          <div><span>USD/INR effect</span><strong id="scoreFx">0</strong></div>
+          <div><span>MCX confirmation</span><strong id="scoreMcx">0</strong></div>
+          <div class="total"><span>Total</span><strong id="totalScore">0</strong></div>
+        </div>
+        <p class="note">This is a heuristic, not a statistical guarantee. It is intentionally simple and should be validated against historical Tamil Nadu prices before being used for real money decisions.</p>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <div>
+            <div class="label">Tamil Nadu estimate</div>
+            <h2>22K / 916 indicative range</h2>
+          </div>
+          <span class="pill">Estimate</span>
+        </div>
+        <label for="tnBase">Current 22K rate (₹ / gram)</label>
+        <input id="tnBase" inputmode="decimal" type="number" step="0.01" placeholder="e.g. 12000">
+        <div class="range-box">
+          <div>
+            <span class="label">Estimated next-session range</span>
+            <strong id="tnRange">—</strong>
+          </div>
+          <div class="small">Indicative only; actual shop rates can differ.</div>
+        </div>
+      </article>
+    </section>
+
+    <section class="card">
+      <div class="card-head">
+        <div>
+          <div class="label">What to do</div>
+          <h2>Simple daily workflow</h2>
+        </div>
+      </div>
+      <div class="steps">
+        <div><span>1</span><p>At ~2:00–2:30 AM IST, enter COMEX now + previous close from your preferred futures quote.</p></div>
+        <div><span>2</span><p>Refresh the live global-gold and FX cards.</p></div>
+        <div><span>3</span><p>Enter MCX current + previous close when the Indian session is available.</p></div>
+        <div><span>4</span><p>Use the signal as a direction/bias, not as an exact future price.</p></div>
+      </div>
+    </section>
+
+    <footer>
+      <p>Front-end only • GitHub Pages friendly • No API keys embedded</p>
+      <p>Data notes: XAUS for live XAU/USD spot; Frankfurter for USD/INR reference FX. See README for source details and limitations.</p>
+    </footer>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
