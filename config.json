@@ -1,6 +1,0 @@
-{
-  "gold_source": "https://xaus.com/api/v1/spot?compact=1",
-  "fx_source": "https://api.frankfurter.dev/v2/rate/usd/inr",
-  "publish": "GitHub Pages",
-  "note": "COMEX futures remain manual unless replaced with a trustworthy browser-safe futures data API."
-}
